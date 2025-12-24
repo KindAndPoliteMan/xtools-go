@@ -1,14 +1,21 @@
 package template
 
 import (
-	"fmt"
-	"io"
-	"os/exec"
-
-	"github.com/KindAndPoliteMan/xtools-go/utils"
+	"strings"
+	"text/template"
 )
 
-var template = `
+type TemplateData struct {
+	Name string
+	Version string
+	MaintainerName string
+	MaintainerEmail string
+	Homepage string
+	Distfiles []string
+}
+
+var (
+	packageTemplate = `
 # Template file for '{{ .Name }}'
 pkgname={{ .Name }}
 version={{ .Version }}
@@ -29,48 +36,22 @@ maintainer="{{ .MaintainerName }} <{{ .MaintainerEmail }}>"
 license="GPL-3.0-or-later"
 homepage="{{ .Homepage }}"
 #changelog=""
-distfiles="{{ .Distfiles }}"
-checksum=badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadb
-`
+distfiles="{{ join .Distfiles "\n\t" }}"
+checksum=badbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadbadb`
+	tFuncs = map[string]interface{}{
+		"join": strings.Join,
+	}
+)
 
-func getGitConfigValue(key string) ([]byte, error) {
-	cmd := exec.Command(fmt.Sprintf("git config user.name %s", key))
-	stdout, err := cmd.StdoutPipe()
+func (t TemplateData) GeneratePackage() (string, error) {
+	var sb strings.Builder
+	tmpl, err := template.New("void-package").Funcs(tFuncs).Parse(packageTemplate)
 	if err != nil {
 		return "", err
 	}
-	err = cmd.Run()
-	if err != nil {
+	if err := tmpl.Execute(&sb, t); err != nil {
 		return "", err
 	}
-	data, err := io.ReadAll(stdout)
-	if err != nil {
-		return "", err
-	}
-	return data, nil
-}
-
-func generateTemplate(name string, version string, userName string, userEmail string, homepage string, distfiles string) error {
-	if userName == "" {
-		if data, err := getGitConfigValue("user.name"); err != nil {
-			return err
-		} else {
-			userName = string(data)
-		}
-	}
-	if userEmail == "" {
-		if data, err := getGitConfigValue("user.email"); err != nil {
-			return err
-		} else {
-			userEmail = string(data)
-		}
-	}
-	data := map[string]string{
-		"Name":            name,
-		"Version":         version,
-		"MaintainerName":  userName,
-		"MaintainerEmail": userEmail,
-		"Homepage":        homepage,
-		"Distfiles":       distfiles,
-	}
+	res := strings.TrimSpace(sb.String())
+	return res, nil
 }
